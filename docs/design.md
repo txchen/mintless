@@ -1,6 +1,8 @@
 # Mintless design handoff
 
-Status: Draft v0.1. Source review date: 2026-10-11. Captured: 2026-11-13.
+Status: Draft v0.2. Source review date: 2026-10-11. Updated: 2026-11-13.
+
+Follow-up requirements are recorded in the [technical stack and implementation plan](implementation.md) and [UI requirements](ui.md). These supersede the original tooling and single-administrator assumptions.
 
 This is an English implementation summary of the user-supplied Chinese handoff, not a verbatim copy. Product choices are proposed requirements, not implemented capabilities. Plaid API details, coverage, limits, pricing, and eligibility claims from the handoff have not been independently verified. Check current official documentation before implementation.
 
@@ -8,7 +10,7 @@ This is an English implementation summary of the user-supplied Chinese handoff, 
 
 A personal or trusted-household, self-hosted, read-only financial account and transaction aggregator. Plaid is an upstream provider; local SQLite owns the durable history and annotations. Recovery, idempotence, and data preservation take priority over continuous availability.
 
-MVP includes multiple Plaid developer profiles; Hosted Link creation and repair; accounts and cached balances; scheduled and manual transaction sync; filtering, search, summaries, and CSV export; notes, custom categories, tags, owners, and reconciliation; manual joint-account mapping and primary-source selection; duplicate candidates; protected administration; and backup/restore.
+MVP includes multiple application users with group-based viewing and bookkeeping access; multiple Plaid developer profiles; Hosted Link creation and repair; accounts and cached balances; scheduled and manual transaction sync; filtering, search, summaries, and CSV export; notes, custom categories, tags, owners, and reconciliation; manual joint-account mapping and primary-source selection; duplicate candidates; protected administration; and backup/restore.
 
 Only request the Transactions product. Do not implement transfers, payments, orders, real-time balance guarantees, investments, tax reporting, receipt OCR, public registration, multi-tenant SaaS, high availability, automatic forced deduplication, webhooks, or transaction refresh in MVP. Multiple profiles do not establish application-level privacy boundaries or justify bypassing provider terms.
 
@@ -83,6 +85,10 @@ These are relationships, not completed migrations. Add foreign keys, indexes, CH
 
 | Table | Core fields and constraints |
 | --- | --- |
+| users | id, username, password_hash, role; unique username |
+| sessions | user_id, protected token representation, expiry/revocation |
+| account_groups | id, name, protected; unique name |
+| group_members | group_id, user_id; unique pair |
 | plaid_profiles | id, name, environment, client_id, secret_ref; no plaintext secret |
 | link_sessions | id, profile_id, link_token_enc, nonce_hash, owner, mode, status, expires_at, exchange_status |
 | plaid_items | id, profile_id, plaid_item_id, access_token_enc, institution_id, cursor, status, last_sync_at; unique profile/item |
@@ -90,7 +96,7 @@ These are relationships, not completed migrations. Add foreign keys, indexes, CH
 | plaid_accounts | id, item_id, plaid_account_id, canonical_account_id, metadata, persistent_account_id, balances, balance_fetched_at; unique item/account |
 | canonical_transactions | id, canonical_account_id, preferred_source_id, status, review_required |
 | plaid_transactions | id, item_id, plaid_transaction_id, plaid_account_id, canonical_transaction_id, pending_transaction_id, amount_minor, currency, date, raw_json, removed_at, superseded_by_id; unique item/transaction |
-| transaction_annotations | canonical_transaction_id, custom_category, note, tags_json, owner, is_reconciled, reconciled_at, updated_at |
+| transaction_annotations | canonical_transaction_id, custom_category, note, tags_json, owner, is_reconciled, reconciled_at, updated_at, updated_by, revision; retain edit history |
 | sync_runs | id, item_id, started_at, finished_at, status, counts_json, error_code; no tokens |
 
 Each source transaction belongs to at most one canonical transaction; multiple sources can represent one canonical transaction. Multiple source accounts may map to one canonical account. Never cascade-delete annotations. User-data deletion is a separate explicit administrative action. Minimize retained raw JSON and document configurable retention, cleanup, and export policies.
@@ -110,7 +116,7 @@ Each source transaction belongs to at most one canonical transaction; multiple s
 - GET /api/transactions/export.csv: protected export with safe CSV handling.
 - GET /api/sync-runs: redacted operational history.
 
-All routes require authentication, authorization, and validation. No public item/remove endpoint in MVP. Future disconnect flows must explain quota consequences, upstream revocation, and separate local-data deletion choices.
+Business routes require authentication, authorization, and validation. Authentication entry points must have explicit unauthenticated behavior. Profile/Item administration, mappings, sharing, and sync logs are admin-only; account/transaction reads, exports, and annotation writes use the accounts in the current user's groups. Add session, user-management, and account-group routes during API design. No public item/remove endpoint in MVP. Future disconnect flows must explain quota consequences, upstream revocation, and separate local-data deletion choices.
 
 ## Security and recovery
 
@@ -118,9 +124,9 @@ Plaid sees financial data; Cloudflare also participates in the trust boundary wh
 
 Load profile secrets from deployment secrets or restricted files. Encrypt access tokens with AES-256-GCM and keep the master key outside the database, repository, and shared backup boundary. No tokens in logs, localStorage, public configuration, or error responses.
 
-Use HTTPS and verified Access/OIDC/equivalent identity. Do not trust arbitrary client-supplied identity headers. Protect writes, Link creation, and export. Cookie sessions require CSRF defense and Secure/HttpOnly/SameSite settings. Restrict volume and secret permissions, patch dependencies, redact account details and raw payloads, and bound upstream requests.
+Use HTTPS and username/password authentication with server-side sessions. Cloudflare Access may provide an additional external access gate. Do not trust arbitrary client-supplied identity headers. Protect writes, Link creation, and export. Cookie sessions require CSRF defense and Secure/HttpOnly/SameSite settings. Restrict volume and secret permissions, patch dependencies, redact account details and raw payloads, and bound upstream requests.
 
-MVP is one administrator or a trusted household. Fine-grained per-member visibility is a separate future feature. Support explicit data export, deletion, and authorization-revocation requirements without conflating them with automatic Item recreation.
+MVP supports admin and member roles in a trusted household. Admins see all accounts; members can view and bookkeep every canonical account in their account groups. New accounts start in the admin-only Unassigned group. Enforce access on the backend for reads, writes, summaries, and exports; shared annotations record actors and detect concurrent edits. Support explicit data export, deletion, and authorization-revocation requirements without conflating them with automatic Item recreation.
 
 Create daily consistent snapshots using SQLite backup API, .backup, or VACUUM INTO; copying a live main database alone is unsafe with WAL. Encrypt offsite backups with restic, age, or equivalent to R2/S3. Suggested configurable retention: 14 daily, 8 weekly, 6 monthly. Keep keys and recovery instructions separately. Validate monthly and complete a full restore drill before release, including accounts, annotations, tokens, and cursors.
 
@@ -129,6 +135,8 @@ Normal failure retains the cursor. Pagination mutation restarts the whole batch.
 After database loss, restore backups before syncing. Plaid cannot guarantee reconstruction of old history or annotations. Exchange-without-persistence requires Dashboard/support investigation. Duplicate recovery uses explicit mappings and primary-source rules while preserving provenance.
 
 ## UI
+
+Use shadcn-vue and Tailwind CSS with Vue and Vite+. Mobile is a first-release requirement. Follow the [UI requirements](ui.md) for compact layouts, restrained styling, touch interactions, and acceptance checks.
 
 - Overview: grouped cash/credit cached balances, account counts, reconciliation backlog, last sync, errors.
 - Accounts: canonical accounts, timestamps, source institution/Item, duplicate candidates, mappings.
@@ -142,7 +150,7 @@ Hide removed/superseded sources by default, expose history in details, and never
 
 ### Phase 0: infrastructure and Sandbox
 
-Compose startup, persistent SQLite, migrations, multiple profiles, environment isolation, secrets, and test authentication. Test Sandbox plus simulated added/modified/removed, pagination mutation, empty initialization, and reauthorization. Unit tests cover currency signs/rounding, idempotent upserts, and annotation retention. No real banks or Production credentials. Restart preserves data.
+Compose startup, persistent SQLite, migrations, multiple profiles, environment isolation, secrets, and username/password sessions with admin/member account authorization tests. Test Sandbox plus simulated added/modified/removed, pagination mutation, empty initialization, and reauthorization. Unit tests cover currency signs/rounding, idempotent upserts, and annotation retention. No real banks or Production credentials. Restart preserves data.
 
 ### Phase 1: Hosted Link and ingestion
 
@@ -156,7 +164,7 @@ Implement canonical identity, soft deletes, annotation/reconciliation preservati
 
 Build Vue UI, filters, CSV export, status/manual sync, controlled resync, migrations/recovery documentation, encrypted backups, and a restore drill. Publish deployment examples, README, chosen LICENSE, SECURITY.md, privacy documentation, and contribution guidance. Verify repeatable deployment/restore, no leaked credentials, and offline incremental recovery.
 
-Future: CSV/OFX/QFX import, transfer/payment matching, category rules, member-level permissions, optional webhooks and balance queries, client-side encryption, richer statistics, and storage adapters.
+Future: CSV/OFX/QFX import, transfer/payment matching, category rules, optional webhooks and balance queries, client-side encryption, richer statistics, and storage adapters.
 
 ## Decision summary and references
 

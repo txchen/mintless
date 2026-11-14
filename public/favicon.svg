@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>Mintless</title>
+  <rect width="32" height="32" rx="8" fill="#1f6f5c"/>
+  <path d="M7.6 24.4V8.4a.8.8 0 0 1 .8-.8h2.7a.8.8 0 0 1 .65.33L16 13.6v7.9l-4.2-5.9v8.8a.8.8 0 0 1-.8.8H8.4a.8.8 0 0 1-.8-.8z" fill="#effbf6"/>
+  <path d="M24.4 24.4V8.4a.8.8 0 0 0-.8-.8h-2.7a.8.8 0 0 0-.65.33L16 13.6v7.9l4.2-5.9v8.8a.8.8 0 0 0 .8.8h2.6a.8.8 0 0 0 .8-.8z" fill="#97dfc2"/>
+</svg>

@@ -1,0 +1,9 @@
+node_modules
+dist
+.local
+data
+backups
+.git
+*.log
+deploy/data
+deploy/secrets

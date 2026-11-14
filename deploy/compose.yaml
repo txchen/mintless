@@ -1,0 +1,19 @@
+services:
+  mintless:
+    image: ${MINTLESS_IMAGE:-mintless:local}
+    build:
+      context: ..
+    restart: unless-stopped
+    ports:
+      - '${MINTLESS_BIND:-127.0.0.1}:${MINTLESS_PUBLISH_PORT:-3000}:3000'
+    volumes:
+      - ${MINTLESS_DATA:-./data}:/data
+    environment:
+      MINTLESS_MASTER_KEY_FILE: /run/secrets/mintless_master_key
+      SYNC_INTERVAL_HOURS: ${SYNC_INTERVAL_HOURS:-12}
+    secrets:
+      - mintless_master_key
+
+secrets:
+  mintless_master_key:
+    file: ${MINTLESS_MASTER_KEY_PATH:-./secrets/master.key}

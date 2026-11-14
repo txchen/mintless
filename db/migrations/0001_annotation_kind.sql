@@ -1,0 +1,1 @@
+ALTER TABLE `transaction_annotations` ADD `kind` text;
